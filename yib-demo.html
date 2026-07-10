@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Yib — Demo</title>
+<style>
+  :root{
+    --bg:#0E0E0F;
+    --card:#1B1C1F;
+    --card-2:#232427;
+    --btn:#34353A;
+    --accent:#FF5A1F;
+    --accent-dim:rgba(255,90,31,0.18);
+    --text:#F5F3EE;
+    --text-muted:#8C8C90;
+    --border:#2E2F33;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:
+      radial-gradient(circle at 20% 10%, #2a3aa8 0%, transparent 45%),
+      radial-gradient(circle at 80% 90%, #1a2a8a 0%, transparent 50%),
+      linear-gradient(135deg,#0c1230,#1f2e8c 55%,#3a3fc9);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    overflow:hidden; touch-action:none; user-select:none;
+    -webkit-user-select:none;
+  }
+  #stage{ position:relative; width:100%; height:100%; }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 20px; z-index:5;
+  }
+  .wordmark{
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    font-size:13px; letter-spacing:.12em; color:rgba(255,255,255,.7);
+    text-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  .wordmark b{ color:var(--accent); font-weight:700; }
+  .gear{
+    width:34px; height:34px; border-radius:50%;
+    background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.15);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:#fff;
+  }
+  .gear svg{ width:16px; height:16px; }
+
+  /* ---------- hint ---------- */
+  .hint{
+    position:absolute; top:18%; left:50%; transform:translateX(-50%);
+    text-align:center; pointer-events:none; transition:opacity .4s ease;
+    width:90%;
+  }
+  .hint .big{
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    font-size:clamp(13px,3.2vw,16px); color:#fff; letter-spacing:.04em;
+    margin-bottom:6px; text-shadow:0 1px 6px rgba(0,0,0,.5);
+  }
+  .hint .small{ font-size:12px; color:rgba(255,255,255,.6); }
+  .hint.faded{ opacity:.16; }
+
+  .shake-meter{
+    position:fixed; width:40px; height:40px; border-radius:50%;
+    pointer-events:none; transform:translate(-50%,-50%);
+    display:none; z-index:4; padding:3px;
+    background:conic-gradient(var(--accent) 0deg, rgba(255,255,255,.15) 0deg);
+  }
+  .shake-meter .inner{ width:100%; height:100%; border-radius:50%; background:rgba(10,10,14,.6); }
+
+  .manual-btn{
+    position:absolute; bottom:26px; left:50%; transform:translateX(-50%);
+    font-size:11.5px; color:#fff; background:rgba(0,0,0,.38);
+    border:1px solid rgba(255,255,255,.18); border-radius:20px;
+    padding:9px 16px; cursor:pointer; z-index:5;
+  }
+
+  /* ---------- dial card ---------- */
+  .dial-wrap{
+    position:fixed; pointer-events:none; z-index:10;
+    opacity:0; transform:scale(.85);
+    transition:opacity .16s ease, transform .16s ease;
+  }
+  .dial-wrap.open{ opacity:1; transform:scale(1); pointer-events:auto; }
+
+  .card{
+    position:absolute; inset:0; border-radius:19%;
+    background:linear-gradient(160deg,#1d1e22,#15161a 70%);
+    border:1px solid var(--border);
+    box-shadow:0 30px 60px -10px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .ring-track{
+    position:absolute; border-radius:50%;
+    border:1px dashed rgba(255,255,255,.10);
+  }
+  .tick{
+    position:absolute; width:2px; height:8px; background:rgba(255,255,255,.18);
+    border-radius:1px; transform-origin:center;
+  }
+  /* slot = ที่นั่งคงที่ของเลข ใช้รับอนิเมชัน idle (ลอยไปมา); ปุ่มข้างในรับ lift/fire แยกชั้น transform */
+  .num-slot{ position:absolute; will-change:transform; }
+  .num-btn{
+    position:absolute; inset:0; border-radius:50%;
+    background:var(--btn); color:rgba(255,255,255,.55);
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    transform:translate(0,0) scale(1); will-change:transform;
+    transition:background .12s ease, color .12s ease,
+               box-shadow .2s ease,
+               transform .22s cubic-bezier(.34,1.56,.64,1);
+  }
+  /* เล็งโดน: เด้งลอยออกตามแกนล้อ + ขยายนิดๆ ให้รู้สึกเหมือนปุ่มสปริงเด้งขึ้น */
+  .num-btn.active{
+    background:var(--accent); color:#1a0e06; z-index:2;
+    transform:translate(var(--nx,0),var(--ny,0)) scale(1.2);
+    box-shadow:0 0 0 10px var(--accent-dim), 0 10px 24px rgba(255,90,31,.5);
+  }
+  /* ยืนยันเลือก: กระแทกแล้วปล่อยคลื่นวงแหวนออก */
+  .num-btn.fired{
+    animation:fire-punch .26s cubic-bezier(.34,1.56,.64,1),
+              fire-ring .42s ease forwards;
+  }
+  @keyframes fire-punch{
+    0%  { transform:translate(var(--nx,0),var(--ny,0)) scale(1.2); }
+    40% { transform:translate(var(--nx,0),var(--ny,0)) scale(1.46); }
+    100%{ transform:translate(var(--nx,0),var(--ny,0)) scale(1.2); }
+  }
+  @keyframes fire-ring{
+    0%  { box-shadow:0 0 0 10px var(--accent-dim), 0 0 0 0 rgba(255,90,31,.55); }
+    100%{ box-shadow:0 0 0 0 rgba(255,90,31,0), 0 0 0 28px rgba(255,90,31,0); }
+  }
+  .center-readout.fired .num{ animation:num-pop .32s ease; }
+  @keyframes num-pop{
+    0%{ transform:scale(1); } 40%{ transform:scale(1.22); } 100%{ transform:scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .num-btn{ transition:background .1s ease, color .1s ease, box-shadow .1s ease; }
+    .num-btn.active{ transform:scale(1.12); }
+    .num-btn.fired, .center-readout.fired .num{ animation:none; }
+  }
+  .aim-line{
+    position:absolute; left:50%; top:50%; height:2px;
+    background:var(--accent); transform-origin:left center;
+    border-radius:2px; opacity:0; box-shadow:0 0 8px rgba(255,90,31,.7);
+  }
+  .aim-line.show{ opacity:1; }
+  .origin-dot{
+    position:absolute; left:50%; top:50%; width:6px; height:6px;
+    margin:-3px; border-radius:50%; background:rgba(255,255,255,.3);
+  }
+
+  .pills{
+    position:absolute; left:50%; transform:translateX(-50%);
+    display:flex; gap:8px; top:34%;
+  }
+  .pill{
+    font-family:ui-monospace,monospace; font-size:11px; font-weight:700;
+    letter-spacing:.04em; padding:7px 14px; border-radius:9px;
+    background:var(--btn); color:rgba(255,255,255,.6); border:1px solid transparent;
+    pointer-events:auto; cursor:pointer;
+  }
+  .pill.active{ background:var(--accent); color:#1a0e06; }
+
+  .center-readout{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    text-align:center; width:70%;
+  }
+  .center-readout .num{
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    font-size:clamp(34px,9vw,44px); font-weight:800; color:var(--accent);
+    line-height:1; text-shadow:0 0 24px rgba(255,90,31,.35);
+  }
+  .center-readout .lbl{
+    font-size:13px; color:rgba(255,255,255,.55); margin-top:2px;
+  }
+  .thumbs{
+    display:flex; gap:6px; justify-content:center; margin-top:10px; flex-wrap:wrap;
+  }
+  .thumb{
+    width:42px; height:42px; border-radius:9px; position:relative; overflow:hidden;
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .thumb .ext{
+    position:absolute; bottom:2px; right:3px; font-size:7px; font-weight:700;
+    color:rgba(255,255,255,.85); font-family:ui-monospace,monospace;
+    background:rgba(0,0,0,.4); padding:1px 3px; border-radius:3px;
+  }
+  .thumb.more{
+    display:flex; align-items:center; justify-content:center;
+    background:var(--card-2); color:rgba(255,255,255,.6);
+    font-size:12px; font-weight:700; font-family:ui-monospace,monospace;
+  }
+
+  /* ---------- target window ---------- */
+  .target{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+    width:min(420px,88vw); background:rgba(15,16,20,.78);
+    backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.1);
+    border-radius:14px; padding:12px 14px 14px; z-index:3;
+  }
+  .target-label{
+    font-size:10.5px; color:rgba(255,255,255,.55); letter-spacing:.05em;
+    margin-bottom:7px; display:flex; align-items:center; gap:6px;
+  }
+  .target-label .dot{ width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .target-box{
+    min-height:46px; border-radius:10px; background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,255,255,.08); padding:9px;
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+  }
+  .target-box .placeholder{ color:rgba(255,255,255,.3); font-size:12.5px; }
+  .chip{
+    display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:5px 9px;
+    font-size:11.5px; color:#fff; animation:pop .25s ease;
+  }
+  @keyframes pop{ from{transform:scale(.7);opacity:0;} to{transform:scale(1);opacity:1;} }
+  .chip .ext2{ color:var(--accent); font-family:ui-monospace,monospace; font-size:10px; }
+
+  /* ---------- settings ---------- */
+  .settings{
+    position:absolute; top:60px; right:20px; width:225px;
+    background:#1b1c1f; border:1px solid var(--border); border-radius:12px;
+    padding:14px; z-index:6; display:none; pointer-events:auto;
+    box-shadow:0 20px 40px rgba(0,0,0,.4);
+  }
+  .settings.open{ display:block; }
+  .settings h4{ margin:0 0 10px; font-size:11px; color:var(--text-muted); letter-spacing:.08em; }
+  .seg{ display:flex; gap:4px; margin-bottom:14px; }
+  .seg button{
+    flex:1; padding:7px 0; border-radius:7px; border:1px solid var(--border);
+    background:#232427; color:var(--text-muted); font-size:11px; cursor:pointer;
+  }
+  .seg button.active{ background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--text); }
+  .switch{ width:36px; height:20px; border-radius:10px; background:#232427; border:1px solid var(--border); position:relative; cursor:pointer; }
+  .switch .knob{ position:absolute; top:1px; left:1px; width:16px; height:16px; border-radius:50%; background:var(--text-muted); transition:left .15s; }
+  .switch.on{ background:var(--accent-dim); border-color:var(--accent); }
+  .switch.on .knob{ left:17px; background:var(--accent); }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="topbar">
+    <div class="wordmark"><b>YIB</b> · DEMO</div>
+    <div class="gear" id="gearBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 13a7.97 7.97 0 0 0 0-2l2-1.5-2-3.4-2.3.6a8 8 0 0 0-1.7-1L15 3h-4l-.4 2.2a8 8 0 0 0-1.7 1l-2.3-.6-2 3.4L6.6 11a8 8 0 0 0 0 2l-2 1.5 2 3.4 2.3-.6a8 8 0 0 0 1.7 1L10.5 21h4l.4-2.2a8 8 0 0 0 1.7-1l2.3.6 2-3.4-2-1.5z"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="hint" id="hint">
+    <div class="big">เขย่าเมาส์ / ลากนิ้วซ้าย-ขวาเร็วๆ ตรงนี้</div>
+    <div class="small">demo จำลองด้วยไฟล์ปลอม — เวอร์ชันจริงบน Windows จะหยิบไฟล์จริงจากเครื่อง</div>
+  </div>
+
+  <div class="shake-meter" id="shakeMeter"><div class="inner"></div></div>
+
+  <div class="manual-btn" id="manualBtn">ลองวงเลข (สำหรับมือถือ)</div>
+
+  <div class="dial-wrap" id="dial">
+    <div class="card"></div>
+  </div>
+
+  <div class="target">
+    <div class="target-label"><span class="dot"></span> หน้าต่างที่โฟกัสอยู่ (จำลอง)</div>
+    <div class="target-box" id="targetBox">
+      <span class="placeholder" id="targetPlaceholder">วางไฟล์ที่นี่...</span>
+    </div>
+  </div>
+
+  <div class="settings" id="settings">
+    <h4>ความไวในการเขย่า</h4>
+    <div class="seg" id="sensSeg">
+      <button data-v="1">หลวม</button>
+      <button data-v="2" class="active">กลาง</button>
+      <button data-v="3">แน่น</button>
+    </div>
+    <h4>โฟลเดอร์เริ่มต้น</h4>
+    <div class="seg" id="folderSeg">
+      <button data-v="Downloads" class="active">Downloads</button>
+      <button data-v="Desktop">Desktop</button>
+    </div>
+    <div class="toggle-row">
+      เสียงคลิก
+      <div class="switch on" id="soundSwitch"><div class="knob"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const hint = document.getElementById('hint');
+  const meter = document.getElementById('shakeMeter');
+  const dial = document.getElementById('dial');
+  const settings = document.getElementById('settings');
+  const gearBtn = document.getElementById('gearBtn');
+  const targetBox = document.getElementById('targetBox');
+  const targetPlaceholder = document.getElementById('targetPlaceholder');
+  const manualBtn = document.getElementById('manualBtn');
+
+  const FILES = {
+    Downloads: [
+      {n:'Screenshot_142033.png', ext:'png', grad:'linear-gradient(135deg,#1e9bd6,#0c4a72)'},
+      {n:'codepatch_v2.json',     ext:'json',grad:'linear-gradient(135deg,#23242a,#0c0d10)'},
+      {n:'invoice_Q2_final.pdf',  ext:'pdf', grad:'linear-gradient(135deg,#c0392b,#5c1a12)'},
+      {n:'design_mockup_v3.fig',  ext:'fig', grad:'linear-gradient(135deg,#7b5cf0,#2c1f6e)'},
+      {n:'meeting_notes.docx',    ext:'doc', grad:'linear-gradient(135deg,#2f6fd0,#13305e)'},
+      {n:'photo_trip.heic',       ext:'jpg', grad:'linear-gradient(135deg,#e08a3c,#6b3c12)'},
+      {n:'project_brief.pdf',     ext:'pdf', grad:'linear-gradient(135deg,#c0392b,#5c1a12)'},
+      {n:'palette_export.png',    ext:'png', grad:'linear-gradient(135deg,#1e9bd6,#0c4a72)'},
+      {n:'demo_recording.mp4',    ext:'mp4', grad:'linear-gradient(135deg,#2c2f36,#0a0b0d)'}
+    ],
+    Desktop: [
+      {n:'untitled-1.png',   ext:'png', grad:'linear-gradient(135deg,#1e9bd6,#0c4a72)'},
+      {n:'todo.txt',         ext:'txt', grad:'linear-gradient(135deg,#3a3b40,#15161a)'},
+      {n:'resume_draft.docx',ext:'doc', grad:'linear-gradient(135deg,#2f6fd0,#13305e)'},
+      {n:'logo_v2.svg',      ext:'svg', grad:'linear-gradient(135deg,#e0b03c,#6b4d12)'},
+      {n:'budget_2026.xlsx', ext:'xls', grad:'linear-gradient(135deg,#2f9e52,#11451f)'},
+      {n:'notes.md',         ext:'md',  grad:'linear-gradient(135deg,#3a3b40,#15161a)'},
+      {n:'wallpaper.jpg',    ext:'jpg', grad:'linear-gradient(135deg,#e08a3c,#6b3c12)'},
+      {n:'archive.zip',      ext:'zip', grad:'linear-gradient(135deg,#8a8f99,#33363d)'},
+      {n:'icon_set.fig',     ext:'fig', grad:'linear-gradient(135deg,#7b5cf0,#2c1f6e)'}
+    ]
+  };
+
+  const THRESHOLDS = { 1:{rev:3,dist:150}, 2:{rev:4,dist:220}, 3:{rev:6,dist:320} };
+  const ORDER = [1,2,3,4,5,6,7,8,9,0]; // เรียงรอบวงแบบโทรศัพท์หมุน
+
+  let sensitivity = 2;
+  let folder = 'Downloads';
+  let soundOn = true;
+
+  let history = [];
+  let cooldown = false;
+  let dialOpen = false;
+  let hintFaded = false;
+  let dialCenter = {x:0,y:0};
+  let currentCount = 0;
+  let cardSize = 0;
+  let picking = false;
+  let idleRAF = null;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function fadeHint(){ if(!hintFaded){ hint.classList.add('faded'); hintFaded = true; } }
+
+  function beep(freq, dur){
+    if(!soundOn) return;
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.frequency.value = freq; osc.type = 'sine';
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + dur);
+    }catch(e){}
+  }
+
+  // ---------- shake detection ----------
+  function onMove(x, y){
+    if(cooldown || dialOpen){ meter.style.display='none'; return; }
+    fadeHint();
+    const now = performance.now();
+    history.push({x,y,t:now});
+    while(history.length && now - history[0].t > 600) history.shift();
+    if(history.length < 5){ meter.style.display='none'; return; }
+
+    let reversals=0, lastDir=0, dist=0;
+    for(let i=0;i<history.length-1;i++){
+      const dx = history[i+1].x - history[i].x;
+      dist += Math.abs(dx);
+      if(Math.abs(dx) < 2) continue;
+      const dir = dx>0?1:-1;
+      if(lastDir!==0 && dir!==lastDir) reversals++;
+      lastDir = dir;
+    }
+    const th = THRESHOLDS[sensitivity];
+    const progress = Math.min(1, Math.max(reversals/th.rev, dist/th.dist));
+    meter.style.display='block'; meter.style.left=x+'px'; meter.style.top=y+'px';
+    meter.style.background = `conic-gradient(var(--accent) ${progress*360}deg, rgba(255,255,255,.15) 0deg)`;
+
+    if(reversals>=th.rev && dist>=th.dist){
+      history=[]; meter.style.display='none'; openDial(x,y);
+    }
+  }
+
+  // ---------- build dial ----------
+  function buildDial(){
+    cardSize = Math.min(360, window.innerWidth*0.86, window.innerHeight*0.7);
+    dial.style.width = cardSize+'px';
+    dial.style.height = cardSize+'px';
+
+    const half = cardSize/2;
+    const btnD = cardSize*0.155;
+    const ringR = half - btnD/2 - cardSize*0.07;
+    const tickR = half - cardSize*0.035;
+
+    dial.innerHTML = `
+      <div class="card"></div>
+      <div class="ring-track" style="left:${half-ringR}px;top:${half-ringR}px;width:${ringR*2}px;height:${ringR*2}px;"></div>
+      <div class="origin-dot"></div>
+      <div class="aim-line" id="aimLine"></div>
+      <div class="pills">
+        <div class="pill ${folder==='Downloads'?'active':''}" data-f="Downloads">DL</div>
+        <div class="pill ${folder==='Desktop'?'active':''}" data-f="Desktop">DESK</div>
+      </div>
+      <div class="center-readout">
+        <div class="num" id="cNum">0</div>
+        <div class="lbl" id="cLbl">เลื่อนเพื่อเลือกจำนวนไฟล์</div>
+        <div class="thumbs" id="cThumbs"></div>
+      </div>
+    `;
+
+    // ticks
+    for(let i=0;i<10;i++){
+      const angle = -90 + i*36 + 18; // กึ่งกลางระหว่างเลข
+      const t = document.createElement('div');
+      t.className='tick';
+      t.style.left = (half + tickR*Math.cos(angle*Math.PI/180))+'px';
+      t.style.top  = (half + tickR*Math.sin(angle*Math.PI/180))+'px';
+      t.style.transform = `translate(-50%,-50%) rotate(${angle+90}deg)`;
+      dial.appendChild(t);
+    }
+
+    // number buttons (ห่อด้วย .num-slot เพื่อให้ idle-float กับ lift/fire อยู่คนละชั้น transform)
+    ORDER.forEach((num, idx)=>{
+      const angle = -90 + idx*36;
+      const bx = half + ringR*Math.cos(angle*Math.PI/180);
+      const by = half + ringR*Math.sin(angle*Math.PI/180);
+
+      const slot = document.createElement('div');
+      slot.className='num-slot';
+      slot.style.width = btnD+'px';
+      slot.style.height = btnD+'px';
+      slot.style.left = (bx - btnD/2)+'px';
+      slot.style.top = (by - btnD/2)+'px';
+      slot.dataset.angle = angle;
+      slot.dataset.phase = (idx * (Math.PI*2/ORDER.length)).toFixed(4);
+
+      const btn = document.createElement('div');
+      btn.className='num-btn';
+      btn.dataset.num = num;
+      btn.dataset.angle = angle;
+      btn.style.fontSize = (btnD*0.4)+'px';
+      // ทิศ "ลอยออก" ตามแกนล้อ ใช้ตอน .active/.fired (สเกลตามขนาดปุ่ม)
+      const lift = btnD*0.18;
+      btn.style.setProperty('--nx', (Math.cos(angle*Math.PI/180)*lift).toFixed(2)+'px');
+      btn.style.setProperty('--ny', (Math.sin(angle*Math.PI/180)*lift).toFixed(2)+'px');
+      btn.textContent = num;
+
+      slot.appendChild(btn);
+      dial.appendChild(slot);
+    });
+
+    dial.querySelectorAll('.pill').forEach(p=>{
+      p.addEventListener('pointerdown', (e)=>{
+        e.stopPropagation();
+        folder = p.dataset.f;
+        dial.querySelectorAll('.pill').forEach(x=>x.classList.toggle('active', x===p));
+        renderReadout(currentCount);
+      });
+    });
+  }
+
+  function renderReadout(count){
+    currentCount = count;
+    const cNum = document.getElementById('cNum');
+    const cLbl = document.getElementById('cLbl');
+    const cThumbs = document.getElementById('cThumbs');
+    cNum.textContent = count>0 ? count : '-';
+    cLbl.textContent = count>0 ? `หยิบ ${count} ไฟล์` : 'เลื่อนเพื่อเลือกจำนวนไฟล์';
+    cThumbs.innerHTML='';
+    if(count>0){
+      const files = FILES[folder].slice(0,count);
+      const shown = files.slice(0,3);
+      shown.forEach(f=>{
+        const d = document.createElement('div');
+        d.className='thumb';
+        d.style.background = f.grad;
+        d.innerHTML = `<span class="ext">${f.ext}</span>`;
+        cThumbs.appendChild(d);
+      });
+      if(files.length>3){
+        const more = document.createElement('div');
+        more.className='thumb more';
+        more.textContent = '+'+(files.length-3);
+        cThumbs.appendChild(more);
+      }
+    }
+  }
+
+  function highlightAngle(px, py){
+    const dx = px - dialCenter.x, dy = py - dialCenter.y;
+    const distFromCenter = Math.hypot(dx,dy);
+    if(distFromCenter < cardSize*0.10){
+      // ใกล้จุดศูนย์กลางเกินไป ไม่เลือกอะไร
+      dial.querySelectorAll('.num-btn').forEach(b=>b.classList.remove('active'));
+      document.getElementById('aimLine').classList.remove('show');
+      renderReadout(0);
+      return null;
+    }
+    let angle = Math.atan2(dy,dx) * 180/Math.PI;
+    let best=null, bestDiff=999;
+    dial.querySelectorAll('.num-btn').forEach(b=>{
+      const a = parseFloat(b.dataset.angle);
+      let diff = Math.abs(((angle-a+540)%360)-180);
+      if(diff<bestDiff){ bestDiff=diff; best=b; }
+    });
+    dial.querySelectorAll('.num-btn').forEach(b=>b.classList.toggle('active', b===best));
+
+    const line = document.getElementById('aimLine');
+    const a = parseFloat(best.dataset.angle);
+    const half = cardSize/2;
+    const btnD = cardSize*0.155;
+    const ringR = half - btnD/2 - cardSize*0.07;
+    line.style.width = (ringR-10)+'px';
+    line.style.transform = `rotate(${a}deg)`;
+    line.classList.add('show');
+
+    renderReadout(parseInt(best.dataset.num));
+    return best;
+  }
+
+  // idle: เลขแต่ละตัวลอย "เข้า-ออก" ตามแกนล้อ + ส่ายข้างนิดๆ เหลื่อมเฟสกันให้ดูมีชีวิต
+  // ตัวที่กำลังถูกเล็ง (.active) จะล็อกนิ่งเพื่อให้การเลือกคม
+  function startIdle(){
+    stopIdle();
+    if(reduceMotion) return;
+    const slots = Array.from(dial.querySelectorAll('.num-slot'));
+    const amp = cardSize*0.155;
+    const t0 = performance.now();
+    (function frame(now){
+      const t = (now - t0)/1000;
+      slots.forEach(slot=>{
+        const btn = slot.firstChild;
+        if(btn && btn.classList.contains('active')){ slot.style.transform = 'translate(0,0)'; return; }
+        const ang = parseFloat(slot.dataset.angle)*Math.PI/180;
+        const ph  = parseFloat(slot.dataset.phase);
+        const breathe = Math.sin(t*0.9 + ph)     * amp*0.09;
+        const sway    = Math.sin(t*0.7 + ph*1.7) * amp*0.07;
+        const x = Math.cos(ang)*breathe - Math.sin(ang)*sway;
+        const y = Math.sin(ang)*breathe + Math.cos(ang)*sway;
+        slot.style.transform = `translate(${x.toFixed(2)}px,${y.toFixed(2)}px)`;
+      });
+      idleRAF = requestAnimationFrame(frame);
+    })(t0);
+  }
+  function stopIdle(){ if(idleRAF){ cancelAnimationFrame(idleRAF); idleRAF = null; } }
+
+  function openDial(x,y){
+    cooldown = true; dialOpen = true;
+    beep(700,0.05);
+    buildDial();
+
+    const half = cardSize/2;
+    let left = x-half, top = y-half;
+    left = Math.max(8, Math.min(window.innerWidth-cardSize-8, left));
+    top  = Math.max(60, Math.min(window.innerHeight-cardSize-8, top));
+    dial.style.left = left+'px';
+    dial.style.top = top+'px';
+    dialCenter = {x:left+half, y:top+half};
+
+    dial.classList.add('open');
+    startIdle();
+  }
+
+  function confirmPick(){
+    if(picking) return;
+    if(currentCount>0){
+      picking = true;
+      const active = dial.querySelector('.num-btn.active');
+      const readout = dial.querySelector('.center-readout');
+      if(active) active.classList.add('fired');
+      if(readout) readout.classList.add('fired');
+      beep(900,0.05); // เสียง lock-in
+      const files = FILES[folder].slice(0,currentCount).reverse(); // เก่า -> ใหม่
+      // หน่วงปิดเล็กน้อย ให้อนิเมชันยืนยันเล่นให้เห็นก่อน
+      setTimeout(()=>{ pasteFiles(files); closeDial(); }, 200);
+    } else {
+      closeDial();
+    }
+  }
+
+  function closeDial(){
+    stopIdle();
+    picking = false;
+    dial.classList.remove('open');
+    dialOpen = false;
+    setTimeout(()=>{ cooldown = false; }, 350);
+  }
+
+  function pasteFiles(files){
+    beep(440,0.08);
+    targetPlaceholder.style.display='none';
+    files.forEach((f,idx)=>{
+      setTimeout(()=>{
+        const chip = document.createElement('div');
+        chip.className='chip';
+        chip.innerHTML = '<span class="ext2">.'+f.ext+'</span><span>'+f.n+'</span>';
+        targetBox.appendChild(chip);
+      }, idx*70);
+    });
+  }
+
+  // ---------- pointer routing ----------
+  stage.addEventListener('pointermove', (e)=>{
+    if(dialOpen){
+      if(!picking) highlightAngle(e.clientX, e.clientY);
+      return;
+    }
+    if(e.target.closest('.settings')) return;
+    onMove(e.clientX, e.clientY);
+  });
+
+  document.addEventListener('pointerdown', (e)=>{
+    if(dialOpen){
+      if(e.target.closest('.pill')) return;
+      confirmPick();
+      return;
+    }
+    if(settings.classList.contains('open') && !e.target.closest('.settings') && !e.target.closest('#gearBtn')){
+      settings.classList.remove('open');
+    }
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key==='Escape' && dialOpen) closeDial();
+  });
+
+  // ---------- settings ----------
+  gearBtn.addEventListener('click', (e)=>{ e.stopPropagation(); settings.classList.toggle('open'); });
+
+  document.getElementById('sensSeg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    sensitivity = parseInt(btn.dataset.v);
+    document.querySelectorAll('#sensSeg button').forEach(b=>b.classList.toggle('active', b===btn));
+  });
+  document.getElementById('folderSeg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    folder = btn.dataset.v;
+    document.querySelectorAll('#folderSeg button').forEach(b=>b.classList.toggle('active', b===btn));
+  });
+  document.getElementById('soundSwitch').addEventListener('click', (e)=>{
+    soundOn = !soundOn; e.currentTarget.classList.toggle('on', soundOn);
+  });
+
+  // ---------- manual trigger ----------
+  manualBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(cooldown || dialOpen) return;
+    fadeHint();
+    openDial(window.innerWidth/2, window.innerHeight/2 - 30);
+  });
+
+})();
+</script>
+</body>
+</html>
