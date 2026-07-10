@@ -53,6 +53,6 @@ https://github.com/ManaphatDev/YibForWindows/releases/tag/v0.1.0
 
 ขอบคุณที่ลองใช้ Yib — ถ้ามีฟีเจอร์ที่อยากให้เพิ่มหรือบั๊กแจ้งมาได้เลยนะครับ 🙂
 
-##เครดิต : Peesamac
+## เครดิต : Peesamac
 
 
