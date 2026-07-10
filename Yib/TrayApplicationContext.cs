@@ -301,7 +301,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private static bool IsStartupEnabled()
     {
         using RegistryKey? key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
-        return key?.GetValue(RunKeyName) is string path && path == Application.ExecutablePath;
+        string? value = key?.GetValue(RunKeyName) as string;
+        return !string.IsNullOrWhiteSpace(value) && NormalizeStartupValue(value) == NormalizeStartupValue(CurrentExecutablePath);
     }
 
     private static void SetStartupEnabled(bool enabled)
@@ -314,12 +315,36 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         if (enabled)
         {
-            key.SetValue(RunKeyName, Application.ExecutablePath);
+            key.SetValue(RunKeyName, BuildStartupValue(), RegistryValueKind.String);
         }
         else
         {
             key.DeleteValue(RunKeyName, throwOnMissingValue: false);
         }
+    }
+
+    private static string CurrentExecutablePath => Environment.ProcessPath ?? Application.ExecutablePath;
+
+    private static string BuildStartupValue()
+    {
+        string path = CurrentExecutablePath;
+        return path.Contains(' ') ? $"\"{path}\"" : path;
+    }
+
+    private static string NormalizeStartupValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        string normalized = value.Trim();
+        if (normalized.Length >= 2 && normalized[0] == '"' && normalized[^1] == '"')
+        {
+            normalized = normalized[1..^1];
+        }
+
+        return normalized.Trim();
     }
 
     private void OnShakeDetected(Point position)
